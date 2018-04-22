@@ -5,8 +5,8 @@ const util = require('util');
 const serial = new s('/dev/ttyACM0', { baudRate: 115200 })
 const parser = new s.parsers.Readline({ delimiter: '\n' })
 
-var _eui = '00-80-00-00-00-00-eb-38';
-var _topic = util.format('node/%s/res', _eui);
+var _eui;
+var _topic;
 
 serial.on('open', () => {
 	console.log('serial2mqtt now running')
@@ -23,7 +23,6 @@ serial.on('open', () => {
 				_eui = data.replace(/(.{2})/g, "$1-").slice(0, -2);
 				_topic = util.format('node/%s/res', _eui);
 				mqtt.publish('node/all/res', _eui);
-				mqtt.subscribe(util.format('lora/%s/up', _eui));
 			}
 			if(data.includes('status')) {
 				mqtt.publish(_topic, data);
@@ -31,7 +30,8 @@ serial.on('open', () => {
 		})
 
 		mqtt.on('message', (topic, payload) => {
-			if(topic.includes('lora')) return;
+			if(!topic.include('all') || !topic.include(_eui)) return;
+			if(!topic.includes('req')) return;
 			console.log(topic, String(payload));
 
 			if(String(payload) === 'reset') {
