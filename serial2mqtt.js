@@ -1,45 +1,61 @@
-const s = require('serialport')
-const mqtt = require('mqtt').connect('mqtt://nms.iptime.org:8080')
-const util = require('util');
+const DEV_PORT = '/dev/ttyACM0';
+const BROKER_ADDR = 'nms.iptime.org:23';
 
-const serial = new s('/dev/ttyACM0', { baudRate: 115200 })
+const s = require('serialport');
+const mqtt = require('mqtt').connect(`mqtt://${BROKER_ADDR}`);
+
+var eui;
+var isOpened = false;
+var isConnedted = false;
+
+const port = new s(DEV_PORT, { baudRate: 115200 });
 const parser = new s.parsers.Readline({ delimiter: '\n' })
 
-var _eui;
-var _topic;
+port.on('open', () => {
+	console.log(`port open: ${DEV_PORT}`);
+	isOpened = true;
+	port.pipe(parser);
+})
 
-serial.on('open', () => {
-	console.log('serial2mqtt now running')
-	serial.pipe(parser)
+port.on('error', (err) => {
+	console.log(`port error: ${err}`);
+	isOpened = false;
+	// handling 필요
+})
 
-	mqtt.on('connect', () => {
-		console.log('connected to the mqtt server')
-		mqtt.subscribe('node/#')
+mqtt.on('connect', () => {
+	console.log(`mqtt connected: ${BROKER_ADDR}`);
+	isConnedted = true;
+	mqtt.subscribe('node/#');
+})
 
-		parser.on('data', (data) => {
-			console.log('[Serial] <<', String(data))
-			if(data.includes('TX DONE')) mqtt.publish(_topic, 'TX DONE');
-			if(data.includes('0080')) {
-				_eui = data.replace(/(.{2})/g, "$1-").slice(0, -2);
-				_topic = util.format('node/%s/res', _eui);
-				mqtt.publish('node/all/res', _eui);
-			}
-			if(data.includes('status')) {
-				mqtt.publish(_topic, data);
-			}
-		})
+mqtt.on('close', () => {
+	console.log(`mqtt disconnected`);
+	isConnedted = false;
+})
 
-		mqtt.on('message', (topic, payload) => {
-			if(!topic.include('all') || !topic.include(_eui)) return;
-			if(!topic.includes('req')) return;
-			console.log(topic, String(payload));
+parser.on('data', (data) => {
+	if(isConnedted == false) return;
 
-			if(String(payload) === 'reset') {
-				serial.set({ brk: true })
-				serial.set({ brk: false })
-			}
+	console.log('[port]:\t', String(data));
+	if(data.includes('0080')) {
+		eui = data.replace(/(.{2})/g, "$1-").slice(0, -2);
+		mqtt.publish('node/all/res', _eui);
+	}
+	if(data.includes('status')) mqtt.publish(`node/${eui}/res`, data);
+	if(data.includes('TX DONE')) mqtt.publish(_topic, 'TX DONE');
+})
 
-			serial.write(util.format('%s\r\n', String(payload)));
-		})
-	})
+mqtt.on('message', (topic, payload) => {
+	if(isOpened == false) return;
+
+	var isReqTopic = (topic.includes('all') || topic.includes(eui)) && topic.includes('req');
+	if(isReqTopic == false) return;
+
+	console.log('[mqtt]:\t', topic, String(payload));
+	if(String(payload) === 'reset') {
+		port.set({ brk: true })
+		port.set({ brk: false })
+	}
+	port.write(`${String(payload)}\r\n`);
 })
