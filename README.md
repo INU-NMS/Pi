@@ -31,6 +31,3 @@ apps for raspberry pi
 	});
 
 	monitor.close();
-
-	
-
