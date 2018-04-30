@@ -37,7 +37,7 @@ parser.on('data', (data) => {
 		mqtt.publish('node/all/res', eui);
 	}
 	if(data.includes('status')) mqtt.publish(`node/${eui}/res`, data);
-	if(data.includes('ack')) mqtt.publish(`node/${eui}/res`, data);
+	if(data.includes('ack=')) mqtt.publish(`node/${eui}/res`, data);
 })
 
 mqtt.on('message', (topic, payload) => {
