@@ -1,6 +1,15 @@
 const DEV_PORT = '/dev/ttyACM0';
 const BROKER_ADDR = 'nms.iptime.org:23';
 
+const usb = require('usb-detection');
+usb.startMonitoring();
+
+usb.on('add', (dev) => {
+	console.log('add', dev);
+}).on('remove', (dev) => {
+	console.log('rm', dev);
+})
+
 const s = require('serialport');
 const mqtt = require('mqtt').connect(`mqtt://${BROKER_ADDR}`);
 
@@ -8,7 +17,7 @@ var eui;
 var isOpened = false;
 var isConnedted = false;
 
-const port = new s(DEV_PORT, { baudRate: 115200 });
+const port = new s(DEV_PORT, { baudRate: 115200 }, HandlePortError);
 const parser = new s.parsers.Readline({ delimiter: '\n' })
 
 port.on('open', () => {
@@ -57,7 +66,6 @@ mqtt.on('message', (topic, payload) => {
 	}
 	port.write(`${String(payload)}\r\n`);
 })
-
 
 function HandlePortError(err) {
 	console.log(`[port]\t${err.message}`);
